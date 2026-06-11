@@ -215,6 +215,7 @@ src/**/geometry.py
 # Others
 **/qp_nodes.py
 src/controllers/strategies/qp_nodes.py
+src/.samples/
 
 alt.py
 **/alt.py

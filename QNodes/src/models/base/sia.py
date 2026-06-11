@@ -1,3 +1,4 @@
+# sia.py
 from abc import ABC, abstractmethod
 import time
 
@@ -97,6 +98,13 @@ class SIA(ABC):
 
         self.sia_subsistema = subsistema
         self.sia_dists_marginales = subsistema.distribucion_marginal()
+        
+        print(self.sia_dists_marginales.sum())
+        print("sia_preparar")
+        print("len =", len(self.sia_dists_marginales))
+        print("sum =", self.sia_dists_marginales.sum())
+        print("dist =", self.sia_dists_marginales)
+        
         self.sia_tiempo_inicio = time.time()
 
     def chequear_parametros(

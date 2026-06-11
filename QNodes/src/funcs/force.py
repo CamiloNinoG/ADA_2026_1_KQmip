@@ -1,8 +1,60 @@
+# funcs/force
 from itertools import product, chain, combinations, islice
 from typing import Generator, Tuple, Union
 import numpy as np
 
 
+def generar_k_particiones_conjunto(conjunto: list[int], k: int) -> Generator[list[list[int]], None, None]:
+    """
+    Algoritmo recursivo eficiente para generar todas las particiones de un 
+    conjunto en exactamente k subgrupos no vacíos y disjuntos.
+    """
+    n = len(conjunto)
+    if k == 1:
+        yield [conjunto]
+        return
+    if n == k:
+        yield [[x] for x in conjunto]
+        return
+    if n < k or k < 1:
+        return
+
+    elemento = conjunto[0]
+    resto = conjunto[1:]
+
+    # Caso 1: El primer elemento forma un grupo por sí solo.
+    # El resto del conjunto se divide en k-1 grupos.
+    for particion in generar_k_particiones_conjunto(resto, k - 1):
+        yield [[elemento]] + particion
+
+    # Caso 2: El primer elemento se une a uno de los k grupos existentes.
+    # El resto del conjunto se divide en k grupos.
+    for particion in generar_k_particiones_conjunto(resto, k):
+        for i in range(len(particion)):
+            yield particion[:i] + [particion[i] + [elemento]] + particion[i+1:]
+
+
+def generar_particiones_multi_k(
+    m_vars: list[int], 
+    n_vars: list[int], 
+    k: int
+) -> Generator[Tuple[list[list[int]], list[list[int]]], None, None]:
+    """
+    Genera el producto cartesiano de todas las k-particiones posibles 
+    tanto para el futuro (alcance) como para el presente (mecanismo).
+    
+    Retorna un generador de tuplas: (particion_alcance, particion_mecanismo)
+    donde cada una es una lista de k subgrupos de índices.
+    """
+    # Si un conjunto tiene menos elementos que k, no se puede partir en k subgrupos no vacíos.
+    # En ese caso, se degrada elegantemente a la máxima partición posible (tamaño del conjunto).
+    k_m = min(k, len(m_vars))
+    k_n = min(k, len(n_vars))
+    
+    particiones_m = list(generar_k_particiones_conjunto(m_vars, k_m))
+    particiones_n = list(generar_k_particiones_conjunto(n_vars, k_n))
+    
+    return product(particiones_m, particiones_n)
 def generar_candidatos(n_vars: int):
     """
     Genera todas las combinaciones posibles para condicionamiento.

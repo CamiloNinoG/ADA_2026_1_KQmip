@@ -1,3 +1,4 @@
+# system.py
 import numpy as np
 from numpy.typing import NDArray
 
@@ -291,3 +292,79 @@ class System:
             f"\nInitial state: {self.estado_inicial}"
             f"\nNCubes:\n" + "\n".join(cubos_info)
         )
+        
+        
+    # nueva    
+    def particionar_multi_k(
+        self,
+        particion_alcance: list[list[int]],
+        particion_mecanismo: list[list[int]],
+    ) -> "System":
+        """
+        Versión corregida: genera un sistema particionado en k bloques independientes
+        y calcula correctamente la distribución como producto de marginales.
+        """
+        nuevo_sistema = System.__new__(System)
+        nuevo_sistema.estado_inicial = self.estado_inicial
+        nuevo_sistema.memo = {}
+
+        ncubos_particionados = []
+
+        for sub_alcance, sub_mecanismo in zip(particion_alcance, particion_mecanismo):
+            arr_alcance = np.array(sub_alcance, dtype=np.int8)
+            arr_mecanismo = np.array(sub_mecanismo, dtype=np.int8)
+
+            if len(arr_alcance) == 0 and len(arr_mecanismo) == 0:
+                continue  # Evitar bloques vacíos
+
+            # Para cada cubo en el alcance, marginalizamos solo con su mecanismo correspondiente
+            for idx in arr_alcance:
+                cubo = next((c for c in self.ncubos if c.indice == idx), None)
+                if cubo is None:
+                    continue
+                dims_a_mantener = np.intersect1d(cubo.dims, arr_mecanismo)
+                dims_a_eliminar = np.setdiff1d(cubo.dims, dims_a_mantener)
+                cubo_part = cubo.marginalizar(dims_a_eliminar)
+                ncubos_particionados.append(cubo_part)
+
+        # Ordenar por índice
+        ncubos_particionados.sort(key=lambda c: c.indice)
+        nuevo_sistema.ncubos = tuple(ncubos_particionados)
+
+        return nuevo_sistema
+
+    # existente
+    def particionar_multi_k2(
+        self,
+        particion_alcance: list[list[int]],
+        particion_mecanismo: list[list[int]],
+    ) -> "System":
+        """
+        Genera un sistema particionado en K partes independientes.
+        Cada subgrupo de alcance (futuro) se independiza, evaluándose 
+        ÚNICAMENTE con su subgrupo de mecanismo (presente) correspondiente.
+        """
+        nuevo_sistema = System.__new__(System)
+        nuevo_sistema.estado_inicial = self.estado_inicial
+        nuevo_sistema.memo = self.memo
+
+        # Emparejamos los bloques del futuro con los bloques del presente.
+        # Si las dimensiones no cuadran (k distintos), se hace padding o truncado por zip.
+        bloques_ncubos = []
+        
+        for sub_alcance, sub_mecanismo in zip(particion_alcance, particion_mecanismo):
+            arr_mecanismo = np.array(sub_mecanismo, dtype=np.int8)
+            
+            for idx_cubo in sub_alcance:
+                # Buscamos el n-cubo original en el sistema
+                cubo_original = next(c for c in self.ncubos if c.indice == idx_cubo)
+                # Cortamos las conexiones manteniendo SOLO las variables de su sub_mecanismo
+                dimensiones_a_eliminar = np.setdiff1d(cubo_original.dims, arr_mecanismo)
+                cubo_particionado = cubo_original.marginalizar(dimensiones_a_eliminar)
+                bloques_ncubos.append(cubo_particionado)
+
+        # Ordenar los n-cubos por su índice original para preservar la estructura del sistema
+        bloques_ncubos.sort(key=lambda c: c.indice)
+        nuevo_sistema.ncubos = tuple(bloques_ncubos)
+
+        return nuevo_sistema

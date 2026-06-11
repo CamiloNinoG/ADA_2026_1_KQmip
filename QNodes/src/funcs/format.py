@@ -1,3 +1,4 @@
+# funcs/format
 from src.funcs.iit import ABECEDARY, LOWER_ABECEDARY
 from src.constants.base import BASE_TWO, COLON_DELIM, VOID_STR
 
@@ -66,3 +67,29 @@ def fmt_parte_q(
     width = max(len(str_purv), len(str_mech)) + 2
 
     return f"⎛{str_purv:^{width}}⎞", f"⎝{str_mech:^{width}}⎠"
+
+def fmt_particion_multi_k(
+    particion_alcance: list[list[int]],
+    particion_mecanismo: list[list[int]],
+) -> str:
+    """
+    Formatea de manera elegante una partición arbitraria de K partes.
+    Muestra los bloques en formato matemático de matrices alineadas.
+    """
+    from src.funcs.iit import ABECEDARY, LOWER_ABECEDARY
+    from src.constants.base import COLON_DELIM, VOID_STR
+
+    linea_superior = ""
+    linea_inferior = ""
+
+    # Iteramos sobre cada una de las k partes resultantes de la MIP
+    for sub_alcance, sub_mecanismo in zip(particion_alcance, particion_mecanismo):
+        purv_str = COLON_DELIM.join(ABECEDARY[j] for j in sub_alcance) if sub_alcance else VOID_STR
+        mech_str = COLON_DELIM.join(LOWER_ABECEDARY[i] for i in sub_mecanismo) if sub_mecanismo else VOID_STR
+
+        width = max(len(purv_str), len(mech_str)) + 2
+
+        linea_superior += f"⎛{purv_str:^{width}}⎞"
+        linea_inferior += f"⎝{mech_str:^{width}}⎠"
+
+    return f"{linea_superior}\n{linea_inferior}\n"

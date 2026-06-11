@@ -1,3 +1,4 @@
+# q_nodes.py
 import time
 from typing import Union
 import numpy as np
@@ -116,7 +117,14 @@ class QNodes(SIA):
         self.indices_mecanismo: np.ndarray
 
         self.logger = SafeLogger(QNODES_STRAREGY_TAG)
-
+        
+    def reset_estado(self):
+        """Limpia todo el estado interno entre ejecuciones."""
+        self.memoria_delta = {}
+        self.memoria_grupo_candidato = {}
+        self.fusion_history = []
+        self.tree = None
+        
     def aplicar_estrategia(
         self,
         estado_inicial: str,
@@ -124,6 +132,11 @@ class QNodes(SIA):
         alcance: str,
         mecanismo: str,
     ):
+        # Capturamos la hora exacta de inicio para este análisis
+        print(
+            f"\n   [QNodes Algorithm] 🧠 Inicializando análisis estructural de grafos..."
+        )
+
         self.sia_preparar_subsistema(estado_inicial, condicion, alcance, mecanismo)
 
         # e.g. (1,0)=A (1,1)=B (1,2)=C #
@@ -149,10 +162,34 @@ class QNodes(SIA):
 
         vertices = list(presente + futuro)
         self.vertices = set(presente + futuro)
+
+        # 📊 LOG INICIAL: Reporte de dimensiones del grafo mapeado
+        print(f"   [QNodes Algorithm] 📊 Detalles del Sistema Candidato:")
+        print(
+            f"                      Futuros (m): {self.m} celdas | Presentes (n): {self.n} celdas"
+        )
+        print(f"                      Total de Vértices en el Grafo: {len(vertices)}")
+        print(
+            f"   [QNodes Algorithm] 🚀 Ejecutando búsqueda del corte mínimo (Cut-Set) en segundo plano..."
+        )
+
+        tiempo_calculo_inicio = time.time()
+
+        # Ejecución del core del algoritmo (Cortes o Algoritmo de Quevedo)
         mip = self.algorithm(vertices)
 
+        tiempo_calculo_fin = time.time() - tiempo_calculo_inicio
+
+        # Formateo y extracción de métricas finales
         fmt_mip = fmt_biparticion_q(list(mip), self.nodes_complement(mip))
         perdida_mip, dist_marginal_mip = self.memoria_grupo_candidato[mip]
+
+        # 🎯 LOG DE ÉXITO: Muestra el resultado exacto encontrado por QNodes
+        print(
+            f"   [QNodes Algorithm] ✨ ¡Corte óptimo determinado con éxito! (Tiempo core: {tiempo_calculo_fin:.4f}s)"
+        )
+        print(f"                      Partición Mínima: {fmt_mip}")
+        print(f"                      Pérdida (Phi): {perdida_mip}\n")
 
         return Solution(
             estrategia=QNODES_LABEL,
@@ -265,7 +302,7 @@ class QNodes(SIA):
                     if isinstance(deltas_ciclo[LAST_IDX], list)
                     else deltas_ciclo
                 )
-            ] = emd_particion_candidata, dist_particion_candidata
+            ] = (emd_particion_candidata, dist_particion_candidata)
 
             par_candidato = (
                 [omegas_ciclo[LAST_IDX]]
@@ -279,6 +316,10 @@ class QNodes(SIA):
 
             omegas_ciclo.pop()
             omegas_ciclo.append(par_candidato)
+            print("OMEGAS:", omegas_ciclo)
+            print("DELTAS:", deltas_ciclo)
+            print("PAR:", par_candidato)
+            print("----------------")
 
             vertices = omegas_ciclo
 
@@ -362,7 +403,7 @@ class QNodes(SIA):
         )
         vector_union_marginal = particion_union.distribucion_marginal()
         emd_union = emd_efecto(vector_union_marginal, self.sia_dists_marginales)
-
+    
         return emd_union, emd_delta, vector_delta_marginal
 
     def definir_clave(

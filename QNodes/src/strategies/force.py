@@ -1,3 +1,4 @@
+# force.py
 from colorama import Fore
 from numpy.typing import NDArray
 from typing import Callable
@@ -15,11 +16,12 @@ from src.middlewares.slogger import SafeLogger
 from src.middlewares.profile import profile, gestor_perfilado
 
 from src.funcs.iit import seleccionar_emd, literales
-from src.funcs.format import fmt_biparticion_fuerza_bruta
+from src.funcs.format import fmt_biparticion_fuerza_bruta, fmt_particion_multi_k
 from src.funcs.force import (
     biparticiones,
     generar_candidatos,
     generar_particiones,
+    generar_particiones_multi_k,
     generar_subsistemas,
 )
 from src.constants.base import (
@@ -67,6 +69,50 @@ class BruteForce(SIA):
     # @profile(
     #     context={TYPE_TAG: BRUTEFORCE_ANALYSIS_TAG}
     # )  # Descomentame y revisa el directorio `./review/profiling/`! #
+    
+    def aplicar_estrategia_k_particiones(
+        self, estado_inicial: str, condiciones: str, alcance: str, mecanismo: str, k: int = 3
+    ):
+        self.sia_preparar_subsistema(estado_inicial, condiciones, alcance, mecanismo)
+        
+        # Inicializadores idénticos a tu código base
+        print("K_particiones")
+        small_phi = np.inf
+        mejor_dist_marg: np.ndarray = DUMMY_ARR
+        solucion_base = Solution(BRUTEFORCE_LABEL, DUMMY_EMD, self.sia_dists_marginales, DUMMY_ARR, ERROR_PARTITION, quiere_hablar=True)
+
+        futuros = list(self.sia_subsistema.indices_ncubos)
+        presentes = list(self.sia_subsistema.dims_ncubos)
+
+        # Invocamos el nuevo motor combinatorio para K partes
+        generador_particiones = generar_particiones_multi_k(futuros, presentes, k)
+        
+        mejor_alcance_part = None
+        mejor_mecanismo_part = None
+
+        for idx, (p_alcance, p_mecanismo) in enumerate(generador_particiones):
+            # Construimos la k-partición inyectando los subgrupos de índices
+            particion = self.sia_subsistema.particionar_multi_k(p_alcance, p_mecanismo)
+            
+            part_marg_dist = particion.distribucion_marginal()
+            emd_value = self.distancia_metrica(part_marg_dist, self.sia_dists_marginales)
+            
+            if emd_value < small_phi:
+                small_phi = emd_value
+                mejor_dist_marg = part_marg_dist
+                mejor_alcance_part = p_alcance
+                mejor_mecanismo_part = p_mecanismo
+                
+                if emd_value == FLOAT_ZERO:
+                    break
+
+        # Formateo dinámico usando la nueva función genérica
+        solucion_base.perdida = small_phi
+        solucion_base.distribucion_particion = mejor_dist_marg
+        solucion_base.particion = fmt_particion_multi_k(mejor_alcance_part, mejor_mecanismo_part)
+        solucion_base.tiempo_ejecucion = time.time() - self.sia_tiempo_inicio
+        return solucion_base
+    
     def aplicar_estrategia(
         self, estado_inicial: str, condiciones: str, alcance: str, mecanismo: str
     ):
@@ -103,9 +149,23 @@ class BruteForce(SIA):
         biparticion_dual: tuple[tuple[int, ...], tuple[int, ...]]
         m, n = futuros.size, presentes.size
 
-        for subalcance, submecanismo in biparticiones(
-            futuros, presentes, (1 << m) * (1 << n)
-        ):
+        # 👇 VALIDADOR: Cálculo de combinaciones totales estimadas antes del bucle 👇
+        combinaciones_totales = (1 << m) * (1 << n)
+        print(f"\n   [BruteForce Loop] 📊 Iniciando evaluación combinatoria:")
+        print(f"                     Futuros (m): {m} celdas | Presentes (n): {n} celdas")
+        print(f"                     Combinaciones máximas teóricas: {combinaciones_totales:,}")
+        print(f"                     Analizando espacio de estados en segundo plano...\n")
+
+        # Ejecutamos el generador de biparticiones
+        biparticiones_gen = biparticiones(futuros, presentes, combinaciones_totales)
+
+        # 👇 Agregamos un enumerador para trackear el progreso real 👇
+        for idx, (subalcance, submecanismo) in enumerate(biparticiones_gen):
+            
+            # 👇 VALIDADOR DE PROGRESO: Notifica cada 20,000 particiones evaluadas 👇
+            if idx % 20000 == 0 and idx > 0:
+                print(f"   [BruteForce Loop] ⏳ Sigo vivo... Evaluadas {idx:,} / {combinaciones_totales:,} particiones (Mínimo Phi actual: {small_phi:.6f})")
+
             subsistema = self.sia_subsistema
             arr_alcance = np.array(subalcance, dtype=np.int8)
             arr_mecanismo = np.array(submecanismo, dtype=np.int8)
@@ -116,6 +176,7 @@ class BruteForce(SIA):
             emd_value = self.distancia_metrica(
                 part_marg_dist, self.sia_dists_marginales
             )
+            
             if emd_value < small_phi:
                 small_phi = emd_value
                 mejor_dist_marg = part_marg_dist
@@ -126,6 +187,7 @@ class BruteForce(SIA):
                 )
                 # La Fuerza Bruta (absoluta) no haría esto #
                 if emd_value == FLOAT_ZERO:
+                    print(f"   [BruteForce Loop] ✨ ¡Atajo óptimo encontrado! Phi alcanzado: {FLOAT_ZERO} en la iteración {idx:,}")
                     solucion_base.perdida = emd_value
                     solucion_base.distribucion_particion = part_marg_dist
                     solucion_base.particion = fmt_biparticion_fuerza_bruta(
@@ -137,6 +199,9 @@ class BruteForce(SIA):
                     )
                     return solucion_base
 
+        # Fin del bucle completo
+        print(f"   [BruteForce Loop] ✅ Bucle finalizado con éxito. Evaluadas {idx + 1:,} combinaciones totales.")
+
         biparticion_formateada = fmt_biparticion_fuerza_bruta(
             [biparticion_prim[ACTUAL], biparticion_prim[EFFECT]],
             [biparticion_dual[ACTUAL], biparticion_dual[EFFECT]],
@@ -147,7 +212,7 @@ class BruteForce(SIA):
         solucion_base.particion = biparticion_formateada
         solucion_base.tiempo_ejecucion = time.time() - self.sia_tiempo_inicio
         return solucion_base
-
+    
     @profile(context={TYPE_TAG: BRUTEFORCE_FULL_ANALYSIS_TAG})
     def analizar_completamente_una_red(self) -> None:
         """
