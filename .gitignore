@@ -57,3 +57,4 @@ build/
 .log
 *.html
 *.log
+*.csv
