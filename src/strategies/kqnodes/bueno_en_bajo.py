@@ -535,7 +535,9 @@ class KQNodes(QNodes):
             n_nodos = len(self.sia_subsistema.indices_ncubos)
             if best_blocks is not None and n_nodos < 20:
                 print(f"   [Refinamiento] Pérdida antes: {best_loss:.6f}")
-                best_blocks, best_loss, best_dist = self._refinar_busqueda_local(best_blocks, k)
+                best_blocks, best_loss, best_dist = self._refinar_busqueda_local(
+                    best_blocks, k
+                )
                 print(f"   [Refinamiento] Pérdida después: {best_loss:.6f}")
             print(
                 f"   [Refinamiento] Pérdida después de Búsqueda Local: {best_loss:.6f}"
@@ -546,7 +548,7 @@ class KQNodes(QNodes):
             [idx for t, idx in b if t == ACTUAL] for b in best_blocks
         ]
         fmt = self.fmt_particion_multi_k(particion_alcance, particion_mecanismo)
-        
+
         # print("\n=== MEMORIAS ===")
         # print("memoria_delta:", len(self.memoria_delta))
         # print("memoria_grupo_candidato:", len(self.memoria_grupo_candidato))

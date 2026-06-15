@@ -7,14 +7,14 @@ from src.strategies.force import BruteForce
 def iniciar():
     """Punto de entrada"""
 
-    # ABCD #
-    estado_inicial = "1000"
-    condiciones =    "1110"
-    alcance =        "1110"
-    mecanismo =      "1110"
+# ABCDEFGHIJ #
+    estado_inicial = "1000000000"
+    condiciones =    "1111111111"
+    alcance =        "1101101101"
+    mecanismo =      "1101101101"
 
     gestor_redes = Manager(estado_inicial)
-    gestor_redes.generar_red(11)
+    # gestor_redes.generar_red(11)
     mpt = gestor_redes.cargar_red()
 
     ### Ejemplo de solución mediante módulo de fuerza bruta ###
