@@ -40,21 +40,21 @@ def generar_particiones_multi_k(
     k: int
 ) -> Generator[Tuple[list[list[int]], list[list[int]]], None, None]:
     """
-    Genera el producto cartesiano de todas las k-particiones posibles 
-    tanto para el futuro (alcance) como para el presente (mecanismo).
-    
-    Retorna un generador de tuplas: (particion_alcance, particion_mecanismo)
-    donde cada una es una lista de k subgrupos de índices.
+    Genera todas las k-particiones posibles del sistema (alcance futuro y mecanismo presente),
+    asegurando que cada uno de los k bloques contenga al menos una variable del futuro (alcance).
     """
-    # Si un conjunto tiene menos elementos que k, no se puede partir en k subgrupos no vacíos.
-    # En ese caso, se degrada elegantemente a la máxima partición posible (tamaño del conjunto).
-    k_m = min(k, len(m_vars))
-    k_n = min(k, len(n_vars))
+    if len(m_vars) < k:
+        return
+        
+    particiones_m = generar_k_particiones_conjunto(m_vars, k)
     
-    particiones_m = list(generar_k_particiones_conjunto(m_vars, k_m))
-    particiones_n = list(generar_k_particiones_conjunto(n_vars, k_n))
-    
-    return product(particiones_m, particiones_n)
+    for p_alcance in particiones_m:
+        # Generar todas las asignaciones posibles de n_vars a los k bloques
+        for assignment in product(range(k), repeat=len(n_vars)):
+            p_mecanismo = [[] for _ in range(k)]
+            for var, block_idx in zip(n_vars, assignment):
+                p_mecanismo[block_idx].append(var)
+            yield p_alcance, p_mecanismo
 
 def generar_candidatos(n_vars: int):
     """

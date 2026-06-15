@@ -19,7 +19,7 @@ estado_inicial = "1" + "0" * (LONGITUD_ELEMENTOS - 1)  # Ej: "1000000000" para 1
 condiciones = "1" * LONGITUD_ELEMENTOS  # Ej: "1111111111" para 10b
 gestor_redes = Manager(estado_inicial)
 mpt = gestor_redes.cargar_red()
-analizador_bf = KQNodes(mpt)  # "KQNodes", "QNodes", "BruteForce"
+analizador_bf = BruteForce(mpt)  # "KQNodes", "QNodes", "BruteForce"
 
 
 # =========================================================================
@@ -94,11 +94,11 @@ def iniciar():
             f"      📥 Datos -> Alcance: {alcance_txt} ({alcance_bin}) | Mecanismo: {mecanismo_txt} ({mecanismo_bin})"
         )
         # 🔄 LOOP SOLICITADO: De K = 3 hasta 4 (K=3) para la misma fila
-        for k in range(2, 6):
+        for k in range(4, 5):
             print(f"      ⚡ Ejecutando 'aplicar_estrategia_k' con K = {k}...")
             tiempo_inicio = time.time()
             try:
-                analizador_bf.reset_estado()
+                # analizador_bf.reset_estado()
                 sia_cero = analizador_bf.aplicar_estrategia_k(
                     estado_inicial,
                     condiciones,

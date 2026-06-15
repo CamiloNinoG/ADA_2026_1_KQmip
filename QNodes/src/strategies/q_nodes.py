@@ -333,59 +333,86 @@ class QNodes(SIA):
             self.memoria_grupo_candidato,
             key=lambda k: self.memoria_grupo_candidato[k][indice_emd],
         )
+        
+    def funcion_submodular(
+        self, deltas: Union[tuple, list[tuple]], omegas: list[Union[tuple, list[tuple]]]
+    ):
+        """
+        Evalúa el impacto de combinar el conjunto de nodos individual delta y su agrupación con el conjunto omega, calculando la diferencia entre EMD (Earth Mover's Distance) de las configuraciones, en conclusión los nodos delta evaluados individualmente y su combinación con el conjunto omega.
 
-    # def funcion_submodular(self, deltas, omegas):
-    #     self.clave_submodular = [], []
+        El proceso se realiza en dos fases principales:
 
-    #     # ── Delta (ya tienes esto, está bien) ─────────────────────────────────
-    #     clave_delta_actual, clave_delta_efecto = self.definir_clave(deltas)
-    #     clave_delta = tuple(clave_delta_actual), tuple(clave_delta_efecto)
+        1. Evaluación Individual:
+           - Crea una copia del estado temporal del subsistema.
+           - Activa los nodos delta en su tiempo correspondiente (presente/futuro).
+           - Si el delta ya fue evaluado antes, recupera su EMD y distribución marginal de memoria
+           - Si no, ha de:
+             * Identificar dimensiones activas en presente y futuro.
+             * Realiza bipartición del subsistema con esas dimensiones.
+             * Calcular la distribución marginal y EMD respecto al subsistema.
+             * Guarda resultados en memoria para seguro un uso futuro.
 
-    #     idxs_alcance_delta = self.clave_submodular[EFFECT]
-    #     dims_mecanismo_delta = self.clave_submodular[ACTUAL]
+        2. Evaluación Combinada:
+           - Sobre la misma copia temporal, activa también los nodos omega.
+           - Calcula dimensiones activas totales (delta + omega).
+           - Realiza bipartición del subsistema completo.
+           - Obtiene EMD de la combinación.
 
-    #     if clave_delta not in self.memoria_delta:
-    #         emd_delta, vector_delta_marginal = self._bipartir_y_emd(
-    #             idxs_alcance_delta, dims_mecanismo_delta
-    #         )
-    #         self.memoria_delta[clave_delta] = emd_delta
-    #     else:
-    #         emd_delta, vector_delta_marginal = self.memoria_delta[clave_delta]
+        Args:
+            deltas: Un nodo individual (tupla) o grupo de nodos (lista de tuplas)
+                   donde cada tupla está identificada por su (tiempo, índice), sea el tiempo t_0 identificado como 0, t_1 como 1 y, el índice hace referencia a las variables/dimensiones habilitadas para operaciones de substracción/marginalización sobre el subsistema, tal que genere la partición.
+            omegas: Lista de nodos ya agrupados, puede contener tuplas individuales
+                   o listas de tuplas para grupos formados por los pares candidatos o más uniones entre sí (grupos candidatos).
 
-    #     # ── Unión (AQUÍ está el problema: nunca se cachea) ────────────────────
-    #     for omega in omegas:
-    #         self.definir_clave(omega)
+        Returns:
+            tuple: (
+                EMD de la combinación omega y delta,
+                EMD del delta individual,
+                Distribución marginal del delta individual
+            )
+            Esto lo hice así para hacer almacenamiento externo de la emd individual y su distribución marginal en las particiones candidatas.
+        """
+        vector_delta_marginal = None
+        self.clave_submodular = [], []
 
-    #         idxs_alcance_union = self.clave_submodular[EFFECT]
-    #         dims_mecanismo_union = self.clave_submodular[ACTUAL]
+        # Delta #
 
-    #         emd_union, _ = self._bipartir_y_emd(
-    #             idxs_alcance_union, dims_mecanismo_union
-    #         )
+        clave_delta_actual, clave_delta_efecto = self.definir_clave(deltas)
+        clave_delta = tuple(clave_delta_actual), tuple(clave_delta_efecto)
 
-    #         return emd_union, emd_delta, vector_delta_marginal
+        idxs_alcance_delta = self.clave_submodular[EFFECT]
+        dims_mecanismo_delta = self.clave_submodular[ACTUAL]
 
-    # def _bipartir_y_emd(
-    #     self,
-    #     idxs_alcance: list,
-    #     dims_mecanismo: list,
-    # ) -> tuple[float, np.ndarray]:
-    #     """
-    #     Versión cacheada de bipartir → distribucion_marginal → emd_efecto.
-    #     La clave es la firma (alcance_ordenado, mecanismo_ordenado).
-    #     """
-    #     clave = (tuple(sorted(idxs_alcance)), tuple(sorted(dims_mecanismo)))
+        if clave_delta not in self.memoria_delta:
+            particion_delta = self.sia_subsistema.bipartir(
+                np.array(idxs_alcance_delta, dtype=np.int8),
+                np.array(dims_mecanismo_delta, dtype=np.int8),
+            )
+            vector_delta_marginal = particion_delta.distribucion_marginal()
+            emd_delta = emd_efecto(vector_delta_marginal, self.sia_dists_marginales)
+            self.memoria_delta[clave_delta] = emd_delta, vector_delta_marginal
 
-    #     if clave not in self._bipartir_emd_cache:
-    #         particion = self.sia_subsistema.bipartir(
-    #             np.array(idxs_alcance, dtype=np.int8),
-    #             np.array(dims_mecanismo, dtype=np.int8),
-    #         )
-    #         dist = particion.distribucion_marginal()
-    #         emd = emd_efecto(dist, self.sia_dists_marginales)
-    #         self._bipartir_emd_cache[clave] = emd
+        else:
+            emd_delta, vector_delta_marginal = self.memoria_delta[clave_delta]
 
-    #     return self._bipartir_emd_cache[clave]
+        # Unión #
+
+        for omega in omegas:
+            self.definir_clave(omega)
+
+        idxs_alcance_union = self.clave_submodular[EFFECT]
+        dims_mecanismo_union = self.clave_submodular[ACTUAL]
+
+        particion_union = self.sia_subsistema.bipartir(
+            np.array(idxs_alcance_union, dtype=np.int8),
+            np.array(dims_mecanismo_union, dtype=np.int8),
+        )
+        vector_union_marginal = particion_union.distribucion_marginal()
+        emd_union = emd_efecto(vector_union_marginal, self.sia_dists_marginales)
+
+        return emd_union, emd_delta, vector_delta_marginal
+
+
 
     def definir_clave(
         self,
@@ -403,63 +430,3 @@ class QNodes(SIA):
 
     def nodes_complement(self, nodes: list[tuple[int, int]]):
         return list(set(self.vertices) - set(nodes))
-
-    def _bipartir_y_emd(
-        self,
-        idxs_alcance: list,
-        dims_mecanismo: list,
-    ) -> float:
-        """Retorna solo el EMD (float). No guarda arrays para ahorrar RAM."""
-        clave = (tuple(sorted(idxs_alcance)), tuple(sorted(dims_mecanismo)))
-
-        if clave not in self._bipartir_emd_cache:
-            particion = self.sia_subsistema.bipartir(
-                np.array(idxs_alcance,   dtype=np.int8),
-                np.array(dims_mecanismo, dtype=np.int8),
-            )
-            dist = particion.distribucion_marginal()
-            emd  = emd_efecto(dist, self.sia_dists_marginales)
-            self._bipartir_emd_cache[clave] = emd  
-
-        return self._bipartir_emd_cache[clave]
-
-
-    def funcion_submodular(self, deltas, omegas):
-        self.clave_submodular = [], []
-
-        # ── Delta ────────────────────────────────────────────────────────────────
-        clave_delta_actual, clave_delta_efecto = self.definir_clave(deltas)
-        clave_delta = tuple(clave_delta_actual), tuple(clave_delta_efecto)
-
-        idxs_alcance_delta   = self.clave_submodular[EFFECT]
-        dims_mecanismo_delta = self.clave_submodular[ACTUAL]
-
-        if clave_delta not in self.memoria_delta:
-            # _bipartir_y_emd retorna float, necesitamos también la dist
-            # para memoria_grupo_candidato → calcularla aquí una sola vez
-            particion = self.sia_subsistema.bipartir(
-                np.array(idxs_alcance_delta,   dtype=np.int8),
-                np.array(dims_mecanismo_delta, dtype=np.int8),
-            )
-            vector_delta_marginal = particion.distribucion_marginal()
-            emd_delta = emd_efecto(vector_delta_marginal, self.sia_dists_marginales)
-
-            # Guardar solo el float en _bipartir_emd_cache también
-            clave_cache = (tuple(sorted(idxs_alcance_delta)), tuple(sorted(dims_mecanismo_delta)))
-            self._bipartir_emd_cache[clave_cache] = emd_delta
-
-            # En memoria_delta guardamos la tupla (necesaria para retornar dist)
-            self.memoria_delta[clave_delta] = (emd_delta, vector_delta_marginal)
-        else:
-            emd_delta, vector_delta_marginal = self.memoria_delta[clave_delta]
-
-        # ── Unión: acumular TODOS los omegas, luego calcular UNA sola vez ────────
-        for omega in omegas:
-            self.definir_clave(omega)   # acumula en clave_submodular
-
-        # El return va FUERA del for
-        idxs_alcance_union   = self.clave_submodular[EFFECT]
-        dims_mecanismo_union = self.clave_submodular[ACTUAL]
-        emd_union = self._bipartir_y_emd(idxs_alcance_union, dims_mecanismo_union)
-
-        return emd_union, emd_delta, vector_delta_marginal

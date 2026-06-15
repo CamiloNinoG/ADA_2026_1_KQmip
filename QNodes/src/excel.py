@@ -1,30 +1,32 @@
 from src.controllers.manager import Manager
 
 # 👇 Importación de estrategias 👇 #
-from src.strategies.force import BruteForce
+from src.strategies.kqnodes.kqnodes import KQNodes
 
 
 def iniciar():
     """Punto de entrada"""
 
-    # ABCD #
-    estado_inicial = "1000"
-    condiciones =    "1110"
-    alcance =        "1110"
-    mecanismo =      "1110"
+# ABCDEFGHIJ #
+    estado_inicial = "1000000000"
+    condiciones =    "1111111111"
+    alcance =        "1101101101"
+    mecanismo =      "1101101101"
 
     gestor_redes = Manager(estado_inicial)
     gestor_redes.generar_red(11)
     mpt = gestor_redes.cargar_red()
+    k=2
 
     ### Ejemplo de solución mediante módulo de fuerza bruta ###
-    analizador_bf = BruteForce(mpt)
+    analizador_bf = KQNodes(mpt)
 
-    sia_cero = analizador_bf.aplicar_estrategia(
+    sia_cero = analizador_bf.aplicar_estrategia_k(
         estado_inicial,
         condiciones,
         alcance,
         mecanismo,
+        k
     )
     print(sia_cero)
     

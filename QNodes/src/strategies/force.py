@@ -70,11 +70,11 @@ class BruteForce(SIA):
     #     context={TYPE_TAG: BRUTEFORCE_ANALYSIS_TAG}
     # )  # Descomentame y revisa el directorio `./review/profiling/`! #
     
-    def aplicar_estrategia_k_particiones(
+    def aplicar_estrategia_k(
         self, estado_inicial: str, condiciones: str, alcance: str, mecanismo: str, k: int = 3
     ):
         self.sia_preparar_subsistema(estado_inicial, condiciones, alcance, mecanismo)
-        
+        print("K_BF##########")
         # Inicializadores idénticos a tu código base
         print(f"\n[🚀 K-Particiones] Iniciando búsqueda de MIP con k = {k}...")
         small_phi = np.inf
@@ -84,7 +84,8 @@ class BruteForce(SIA):
         futuros = list(self.sia_subsistema.indices_ncubos)
         presentes = list(self.sia_subsistema.dims_ncubos)
 
-        # Invocamos el nuevo motor combinatorio para K partes
+        # Invocamos el 
+        # motor combinatorio para K partes
         generador_particiones = generar_particiones_multi_k(futuros, presentes, k)
         
         mejor_alcance_part = None
@@ -93,7 +94,7 @@ class BruteForce(SIA):
         # --- TELEMETRÍA INICIAL ---
         # Nota: Si el generador es un iterador puro, no tendrá len(). 
         # Si conoces el número de Stirling de antemano, podrías imprimirlo aquí.
-        print(f"📊 Elementos a evaluar -> Futuros: {len(futuros)} | Presentes: {len(presentes)} (Total: {len(futuros)+len(presentes)})")
+        # print(f"📊 Elementos a evaluar -> Futuros: {len(futuros)} | Presentes: {len(presentes)} (Total: {len(futuros)+len(presentes)})")
         print("⏳ Buscando combinaciones...")
 
         idx = 0
@@ -125,7 +126,7 @@ class BruteForce(SIA):
                 mejor_mecanismo_part = p_mecanismo
                 
                 # 2. Print de Hito: Rompe la línea dinámica para avisar que encontramos un mejor corte
-                print(f"\n✨ [Nuevo Mínimo Hallado] Iteración #{idx} | Φ: {emd_value:.6f} | Lapso: {lapso:.4f}s")
+                # print(f"\n✨ [Nuevo Mínimo Hallado] Iteración #{idx} | Φ: {emd_value:.6f} | Lapso: {lapso:.4f}s")
                 # Formateamos temporalmente para mostrar el corte en consola
                 corte_actual = fmt_particion_multi_k(mejor_alcance_part, mejor_mecanismo_part)
                 print(f"   🧩 Estructura: {corte_actual}")
@@ -136,6 +137,15 @@ class BruteForce(SIA):
 
         # Limpieza de la línea dinámica al terminar el bucle
         print(f"\n🏁 Bucle finalizado de forma exitosa. Evaluaciones totales: {idx}")
+
+        if mejor_alcance_part is None:
+            # Caso degenerado cuando la cantidad de futuros es menor que k
+            mejor_alcance_part = [[idx] for idx in futuros]
+            while len(mejor_alcance_part) < k:
+                mejor_alcance_part.append([])
+            mejor_mecanismo_part = [[] for _ in range(k)]
+            if presentes:
+                mejor_mecanismo_part[0] = list(presentes)
 
         # Formateo dinámico usando la nueva función genérica
         solucion_base.perdida = small_phi
