@@ -12,7 +12,7 @@ from src.funcs.format import fmt_particion_multi_k
 from src.middlewares.profile import gestor_perfilado, profile
 
 
-# MEJOR PARTICON
+# CASI BIEN
 class KQNodes(QNodes):
     """
     Extensión de QNodes para k-particiones (3 ≤ k ≤ 5) usando el árbol de fusiones.
@@ -91,21 +91,23 @@ class KQNodes(QNodes):
             alc = sorted([idx for t, idx in bloque if t == EFFECT])
             mec = sorted([idx for t, idx in bloque if t == ACTUAL])
 
-            if not alc or not mec:
+            # Restricción IIT: el alcance (futuro) NO puede estar vacío en ningún bloque.
+            # El mecanismo (presente) SÍ puede estar vacío.
+            if not alc:
                 return INFTY_POS, None
 
             try:
-                # _evaluate_k_partition — necesita dist completo
+                # Bipartir y obtener dist (funciona tanto para mec normal como mec vacio)
                 emd_bloque, dist_bloque = self._bipartir_y_emd(alc, mec, solo_emd=False)
             except Exception as e:
                 print(f"[_evaluate_k_partition] Error bloque alc={alc} mec={mec}: {e}")
                 return INFTY_POS, None
 
-            # Colocar distribución del bloque en las posiciones correctas de hat_p
-            for i, idx in enumerate(alc):
-                if idx in indices_sistema and i < len(dist_bloque):
+            # Colocar distribución del bloque en las posiciones correctas de hat_p usando el índice global
+            for idx in alc:
+                if idx in indices_sistema:
                     pos = indices_sistema.index(idx)
-                    hat_p[pos] = dist_bloque[i]
+                    hat_p[pos] = dist_bloque[pos]
 
         if len(hat_p) != len(self.sia_dists_marginales):
             return INFTY_POS, None
@@ -330,38 +332,43 @@ class KQNodes(QNodes):
             grupos_p = [indices_presentes[i::k] for i in range(k)]
             registrar(grupos_f, grupos_p)
 
-        # Tope adaptativo: menos candidatos = menos llamadas a bipartir = menos RAM
-        tope = 10 if n >= 20 else (25 if n >= 15 else 50)
+        # Tope adaptativo: menos candidatos = menos llamadas a bipartir = menos RAM.
+        # Al permitir conjuntos vacíos en el presente, los candidatos son más variados y útiles.
+        if n >= 25:
+            tope = 3
+        elif n >= 22:
+            tope = 6
+        elif n >= 20:
+            tope = 12
+        elif n >= 15:
+            tope = 30
+        else:
+            tope = 50
         return pool[:tope]
 
     # ====================== HELPERS ======================
 
     def _bloques_son_validos(self, blocks: list, k: int) -> bool:
-        """Verifica que haya exactamente k bloques, cada uno con ≥1 ACTUAL y ≥1 EFFECT."""
+        """
+        Verifica que haya exactamente k bloques. Reglas:
+          - Cada bloque debe tener ≥1 variable EFFECT (alc ≠ ∅): sin futuro, el bloque es inválido.
+          - El mecanismo puede ser vacío (mec = ∅): las variables futuras de ese bloque
+            se tratan como independientes del pasado (válido en IIT).
+        """
         if len(blocks) != k:
             return False
         for b in blocks:
-            if not any(t == ACTUAL for t, _ in b):
-                return False
             if not any(t == EFFECT for t, _ in b):
                 return False
         return True
 
     def _generar_particion_balanceada(self, vertices: list, k: int) -> list[list]:
-        """Round-robin garantizando ACTUAL y EFFECT en cada bloque."""
+        """Round-robin garantizando al menos 1 EFFECT en cada bloque (ACTUAL puede ser vacío)."""
         bloques = [[] for _ in range(k)]
         for i, v in enumerate(vertices):
             bloques[i % k].append(v)
 
         for i, bloque in enumerate(bloques):
-            if not any(t == ACTUAL for t, _ in bloque):
-                for otro in bloques:
-                    actuales = [(t, idx) for t, idx in otro if t == ACTUAL]
-                    if len(actuales) >= 2:
-                        v_robar = actuales[-1]
-                        otro.remove(v_robar)
-                        bloque.append(v_robar)
-                        break
             if not any(t == EFFECT for t, _ in bloque):
                 for otro in bloques:
                     effects = [(t, idx) for t, idx in otro if t == EFFECT]
@@ -413,22 +420,17 @@ class KQNodes(QNodes):
                     if len(best_blocks[bloque_origen_idx]) <= 1:
                         continue
 
-                    # Validar restricciones de IIT: al menos 1 ACTUAL y 1 EFFECT en el bloque de origen tras la salida
+                    # Validar restricciones de IIT: cada bloque debe conservar ≥1 variable EFFECT.
+                    # Se permite mec=∅ (válido), pero alc=∅ es inválido.
                     t_elem, _ = elem
-                    if t_elem == ACTUAL:
-                        tiene_otro_actual = any(
-                            t == ACTUAL and not (t == elem[0] and val == elem[1])
-                            for t, val in best_blocks[bloque_origen_idx]
-                        )
-                        if not tiene_otro_actual:
-                            continue
-                    else:
+                    if t_elem == EFFECT:
                         tiene_otro_effect = any(
                             t == EFFECT and not (t == elem[0] and val == elem[1])
                             for t, val in best_blocks[bloque_origen_idx]
                         )
                         if not tiene_otro_effect:
                             continue
+                    # Si es ACTUAL, puede salir libremente (mec=∅ es válido)
 
                     # Probar cada uno de los otros bloques como destino
                     for bloque_destino_idx in range(k):
@@ -535,9 +537,7 @@ class KQNodes(QNodes):
             n_nodos = len(self.sia_subsistema.indices_ncubos)
             if best_blocks is not None and n_nodos < 20:
                 print(f"   [Refinamiento] Pérdida antes: {best_loss:.6f}")
-                best_blocks, best_loss, best_dist = self._refinar_busqueda_local(
-                    best_blocks, k
-                )
+                best_blocks, best_loss, best_dist = self._refinar_busqueda_local(best_blocks, k)
                 print(f"   [Refinamiento] Pérdida después: {best_loss:.6f}")
             print(
                 f"   [Refinamiento] Pérdida después de Búsqueda Local: {best_loss:.6f}"
@@ -548,7 +548,7 @@ class KQNodes(QNodes):
             [idx for t, idx in b if t == ACTUAL] for b in best_blocks
         ]
         fmt = self.fmt_particion_multi_k(particion_alcance, particion_mecanismo)
-
+        
         # print("\n=== MEMORIAS ===")
         # print("memoria_delta:", len(self.memoria_delta))
         # print("memoria_grupo_candidato:", len(self.memoria_grupo_candidato))

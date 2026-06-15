@@ -10,7 +10,7 @@ import openpyxl
 
 from src.controllers.manager import Manager
 
-from src.strategies.kqnodes.bueno_en_bajo import KQNodes
+from src.strategies.kqnodes.kqnodes import KQNodes
 
 from src.strategies.q_nodes import QNodes
 
@@ -24,7 +24,7 @@ from src.strategies.kqnodes.profilter import KQNodesProfiler
 
 # =========================================================================
 
-LONGITUD_ELEMENTOS = 15
+LONGITUD_ELEMENTOS = 10
 
 
 nombre_hoja = f"{LONGITUD_ELEMENTOS}A-Elementos"
@@ -32,7 +32,8 @@ nombre_hoja = f"{LONGITUD_ELEMENTOS}A-Elementos"
 
 # Estrategia a ejecutar
 
-K_PARTICIONES = 2
+
+K_PARTICIONES = 5
 
 
 # Método a usar

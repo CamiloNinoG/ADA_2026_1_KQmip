@@ -12,7 +12,7 @@ from src.funcs.format import fmt_particion_multi_k
 from src.middlewares.profile import gestor_perfilado, profile
 
 
-# MEJOR PARTICON
+# CASI BIEN
 class KQNodes(QNodes):
     """
     Extensión de QNodes para k-particiones (3 ≤ k ≤ 5) usando el árbol de fusiones.
@@ -287,16 +287,7 @@ class KQNodes(QNodes):
         pool = []
         seen = set()
 
-        def _bloques_validos_con_vacio(blocks):
-            """Validación que permite mecanismo vacío (∅) en cualquier bloque."""
-            if len(blocks) != k:
-                return False
-            for b in blocks:
-                if not any(t == EFFECT for t, _ in b):
-                    return False  # alcance vacío nunca es válido
-            return True
-
-        def registrar(part_alcance, part_mec, permitir_vacio_mec=False):
+        def registrar(part_alcance, part_mec):
             if len(part_alcance) != k or len(part_mec) != k:
                 return False
             blocks = []
@@ -305,9 +296,7 @@ class KQNodes(QNodes):
                 bloque += [map_actual[idx] for idx in mec if idx in map_actual]
                 if bloque:
                     blocks.append(bloque)
-            # Usar validación permisiva si se indica
-            valido = _bloques_validos_con_vacio(blocks) if permitir_vacio_mec else self._bloques_son_validos(blocks, k)
-            if not valido:
+            if not self._bloques_son_validos(blocks, k):
                 return False
             sig = tuple(sorted(tuple(sorted(b)) for b in blocks))
             if sig in seen:
@@ -336,68 +325,40 @@ class KQNodes(QNodes):
             for p_mec in parts_presentes + parts_struct_p:
                 registrar(p_alc, p_mec)
 
-        # ─── CANDIDATOS CON MECANISMO VACÍO ───────────────────────────────────
-        # Añadir directamente particiones donde 1 bloque tiene mec=∅.
-        # Esto es crítico para K=2: (A/∅ | resto/todo) es el óptimo en muchos sistemas.
-        # Para K>2 la misma idea aplica. Coste: n_futuros evaluaciones, barato.
-        if n < 23:  # Solo para tamaños manejables
-            # Para cada elemento individual del futuro, crear (elem/∅ | resto/todo)
-            for i, idx_solo in enumerate(indices_futuros):
-                resto_f = [x for x in indices_futuros if x != idx_solo]
-                if not resto_f:
-                    continue
-                # Bloque 1: solo ese futuro, mec vacío
-                # Bloque 2: el resto del futuro + todo el presente
-                p_alc = [[idx_solo]] + [resto_f] + [[] for _ in range(k - 2)]
-                p_mec = [[]] + [indices_presentes] + [[] for _ in range(k - 2)]
-                if k == 2:
-                    registrar([p_alc[0], p_alc[1]], [p_mec[0], p_mec[1]], permitir_vacio_mec=True)
-                    # Invertido: el bloque grande con mec vacío
-                    registrar([p_alc[1], p_alc[0]], [p_mec[1], p_mec[0]], permitir_vacio_mec=True)
-            # Para K>2: solo un bloque por vez tiene mec vacío
-            if k > 2:
-                parts_todos_f = parts_futuros + parts_struct_f
-                for p_alc in parts_todos_f[:5]:  # limitar para no explotar pool
-                    for j in range(k):
-                        p_mec_vacio = []
-                        for ki in range(k):
-                            p_mec_vacio.append([] if ki == j else indices_presentes)
-                        registrar(p_alc, p_mec_vacio, permitir_vacio_mec=True)
-
-        print(f"→ Total candidatos en pool (con ∅): {len(pool)}")
+        print(f"→ Total candidatos en pool: {len(pool)}")
 
         if not pool:
             grupos_f = [indices_futuros[i::k] for i in range(k)]
             grupos_p = [indices_presentes[i::k] for i in range(k)]
             registrar(grupos_f, grupos_p)
 
-        # Tope adaptativo según tamaño del sistema
+        # Tope adaptativo: menos candidatos = menos llamadas a bipartir = menos RAM.
+        # Al permitir conjuntos vacíos en el presente, los candidatos son más variados y útiles.
         if n >= 25:
-            tope = 5
+            tope = 3
         elif n >= 22:
-            tope = 10
+            tope = 6
         elif n >= 20:
-            tope = 15
+            tope = 12
         elif n >= 15:
-            tope = 35
+            tope = 30
         else:
-            tope = 80  # Sistemas pequeños: pool completo
+            tope = 50
         return pool[:tope]
 
     # ====================== HELPERS ======================
 
-    def _bloques_son_validos(self, blocks: list, k: int, allow_empty_mec: bool = False) -> bool:
+    def _bloques_son_validos(self, blocks: list, k: int) -> bool:
         """
         Verifica que haya exactamente k bloques. Reglas:
           - Cada bloque debe tener ≥1 variable EFFECT (alc ≠ ∅): sin futuro, el bloque es inválido.
-          - El mecanismo puede ser vacío (mec = ∅) solo si allow_empty_mec es True.
+          - El mecanismo puede ser vacío (mec = ∅): las variables futuras de ese bloque
+            se tratan como independientes del pasado (válido en IIT).
         """
         if len(blocks) != k:
             return False
         for b in blocks:
             if not any(t == EFFECT for t, _ in b):
-                return False
-            if not allow_empty_mec and not any(t == ACTUAL for t, _ in b):
                 return False
         return True
 
@@ -419,14 +380,11 @@ class KQNodes(QNodes):
         return bloques
 
     def _refinar_busqueda_local(
-        self, blocks: List[List[Tuple[int, int]]], k: int, allow_empty_mec: bool = False
+        self, blocks: List[List[Tuple[int, int]]], k: int
     ) -> Tuple[List[List[Tuple[int, int]]], float, np.ndarray]:
         """
-        Búsqueda local (Hill Climbing) con dos tipos de movimiento:
-        1. Mover un elemento individual entre bloques.
-        2. [NUEVO] Vaciar el mecanismo completo de un bloque ("salto de vaciado").
-           Permite escapar mínimos locales donde la ruta unitaria atraviesa
-           una montaña de pérdida pero el destino (mec=∅) es mejor.
+        Realiza una búsqueda local (Hill Climbing) a partir de una partición dada,
+        moviendo elementos individuales entre bloques para reducir la pérdida EMD.
         """
         import traceback
 
@@ -434,22 +392,23 @@ class KQNodes(QNodes):
             best_blocks = [list(b) for b in blocks]
             best_loss, best_dist = self._evaluate_k_partition(best_blocks)
 
+            # Listado de todas las variables en la partición (tiempo, index)
+            elementos = []
+            for b in best_blocks:
+                elementos.extend(b)
+
             mejorado = True
             paso = 0
-            max_pasos = 50
+            max_pasos = 50  # Límite para evitar bucles infinitos en redes masivas
 
             while mejorado and paso < max_pasos:
                 mejorado = False
                 paso += 1
-
-                # ─── TIPO 1: Mover elemento individual ──────────────────────
-                elementos = []
-                for b in best_blocks:
-                    elementos.extend(b)
-
+                # Probar a mover cada elemento a otro bloque
                 for elem in elementos:
                     bloque_origen_idx = -1
                     for idx, b in enumerate(best_blocks):
+                        # Evitar usar elem in b directly if it causes issues
                         if any(elem[0] == x[0] and elem[1] == x[1] for x in b):
                             bloque_origen_idx = idx
                             break
@@ -457,9 +416,12 @@ class KQNodes(QNodes):
                     if bloque_origen_idx == -1:
                         continue
 
+                    # Evitar dejar vacío un bloque
                     if len(best_blocks[bloque_origen_idx]) <= 1:
                         continue
 
+                    # Validar restricciones de IIT: cada bloque debe conservar ≥1 variable EFFECT.
+                    # Se permite mec=∅ (válido), pero alc=∅ es inválido.
                     t_elem, _ = elem
                     if t_elem == EFFECT:
                         tiene_otro_effect = any(
@@ -468,19 +430,15 @@ class KQNodes(QNodes):
                         )
                         if not tiene_otro_effect:
                             continue
-                    elif t_elem == ACTUAL and not allow_empty_mec:
-                        tiene_otro_actual = any(
-                            t == ACTUAL and not (t == elem[0] and val == elem[1])
-                            for t, val in best_blocks[bloque_origen_idx]
-                        )
-                        if not tiene_otro_actual:
-                            continue
+                    # Si es ACTUAL, puede salir libremente (mec=∅ es válido)
 
+                    # Probar cada uno de los otros bloques como destino
                     for bloque_destino_idx in range(k):
                         if bloque_destino_idx == bloque_origen_idx:
                             continue
 
                         temp_blocks = [list(b) for b in best_blocks]
+                        # Remove element safely
                         for x in temp_blocks[bloque_origen_idx]:
                             if x[0] == elem[0] and x[1] == elem[1]:
                                 temp_blocks[bloque_origen_idx].remove(x)
@@ -493,41 +451,10 @@ class KQNodes(QNodes):
                             best_dist = dist
                             best_blocks = temp_blocks
                             mejorado = True
-                            break
+                            break  # Aceptar movimiento y reiniciar el barrido
 
                     if mejorado:
                         break
-
-                if mejorado:
-                    continue
-
-                # ─── TIPO 2: Salto de vaciado (solo si allow_empty_mec) ─────
-                # Evalúa vaciar el mecanismo completo de un bloque de golpe.
-                # Necesario para escapar mínimos locales: el camino unitario
-                # empeora la pérdida pero el destino (mec=∅) es mejor.
-                if allow_empty_mec:
-                    for i_bloque in range(k):
-                        actuales_en_bloque = [
-                            e for e in best_blocks[i_bloque] if e[0] == ACTUAL
-                        ]
-                        if not actuales_en_bloque:
-                            continue  # ya está vacío
-
-                        # Construir bloque sin ningún elemento ACTUAL
-                        temp_blocks = [list(b) for b in best_blocks]
-                        temp_blocks[i_bloque] = [
-                            e for e in temp_blocks[i_bloque] if e[0] == EFFECT
-                        ]
-                        if not temp_blocks[i_bloque]:  # quedaría vacío → inválido
-                            continue
-
-                        loss, dist = self._evaluate_k_partition(temp_blocks)
-                        if loss < best_loss:
-                            best_loss = loss
-                            best_dist = dist
-                            best_blocks = temp_blocks
-                            mejorado = True
-                            break
 
             return best_blocks, best_loss, best_dist
         except Exception as e:
@@ -609,23 +536,11 @@ class KQNodes(QNodes):
             # Aplicar refinamiento por búsqueda local (Hill Climbing)
             n_nodos = len(self.sia_subsistema.indices_ncubos)
             if best_blocks is not None and n_nodos < 20:
-                print(f"   [HC] Pérdida pool antes: {best_loss:.6f}")
-
-                # Fase 1 – Restringida: sin mecanismos vacíos (ancla estructural)
-                b1, l1, d1 = self._refinar_busqueda_local(best_blocks, k, allow_empty_mec=False)
-
-                # Fase 2 – Relajada: con saltos de vaciado desde mismo inicio
-                b2, l2, d2 = self._refinar_busqueda_local(best_blocks, k, allow_empty_mec=True)
-
-                # Fase 3 – Relajada desde el mejor resultado de Fase 1
-                # (permite escapar mínimos locales distintos del inicio)
-                b3, l3, d3 = self._refinar_busqueda_local(b1, k, allow_empty_mec=True)
-
-                mejor = min([(l1, b1, d1), (l2, b2, d2), (l3, b3, d3)], key=lambda x: x[0])
-                best_loss, best_blocks, best_dist = mejor[0], mejor[1], mejor[2]
-                print(f"   [HC] Pérdida final: {best_loss:.6f}")
+                print(f"   [Refinamiento] Pérdida antes: {best_loss:.6f}")
+                best_blocks, best_loss, best_dist = self._refinar_busqueda_local(best_blocks, k)
+                print(f"   [Refinamiento] Pérdida después: {best_loss:.6f}")
             print(
-                f"   [Refinamiento] Pérdida final: {best_loss:.6f}"
+                f"   [Refinamiento] Pérdida después de Búsqueda Local: {best_loss:.6f}"
             )
 
         particion_alcance = [[idx for t, idx in b if t == EFFECT] for b in best_blocks]
@@ -633,7 +548,7 @@ class KQNodes(QNodes):
             [idx for t, idx in b if t == ACTUAL] for b in best_blocks
         ]
         fmt = self.fmt_particion_multi_k(particion_alcance, particion_mecanismo)
-
+        
         # print("\n=== MEMORIAS ===")
         # print("memoria_delta:", len(self.memoria_delta))
         # print("memoria_grupo_candidato:", len(self.memoria_grupo_candidato))
