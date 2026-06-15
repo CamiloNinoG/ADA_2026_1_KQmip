@@ -24,7 +24,7 @@ from src.strategies.kqnodes.profilter import KQNodesProfiler
 
 # =========================================================================
 
-LONGITUD_ELEMENTOS = 10
+LONGITUD_ELEMENTOS = 15
 
 
 nombre_hoja = f"{LONGITUD_ELEMENTOS}A-Elementos"

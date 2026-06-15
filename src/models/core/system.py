@@ -28,6 +28,13 @@ class System:
     ):
         num_nodos = self.validacion_inicial(tpm, estado_inicio)
         self.estado_inicial = estado_inicio
+        
+        # Optimizar memoria: cast a int8 para enteros o float32 para reales
+        if np.issubdtype(tpm.dtype, np.integer):
+            tpm = tpm.astype(np.int8)
+        else:
+            tpm = tpm.astype(np.float32)
+
         notacion_llegada = (
             aplicacion.indexado_llegada.value
             if isinstance(aplicacion.indexado_llegada, Notation)
