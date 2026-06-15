@@ -9,7 +9,7 @@ class TreeNode:
         self.parent = None
     
     def _all_tree_members(self):
-        return self.tree.get_all_leaves()
+        return self.get_all_leaves()
 
     @property
     def is_leaf(self):
