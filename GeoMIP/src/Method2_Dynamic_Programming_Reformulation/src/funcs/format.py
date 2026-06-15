@@ -26,28 +26,40 @@ def fmt_biparticion(
     )
 
 
-def fmt_biparte_q(
-    prim: list[tuple[int, int]],
-    dual: list[tuple[int, int]],
+def fmt_kparte_q(
+    partes: list[list[tuple[int, int]]],
     to_sort: bool = True,
 ) -> str:
-    top_prim, bottom_prim = fmt_parte_q(prim, to_sort)
-    top_dual, bottom_dual = fmt_parte_q(dual, to_sort)
 
-    return f"{top_prim}{top_dual}\n{bottom_prim}{bottom_dual}"
+    partes_formateadas = []
+
+    for parte in partes:
+
+        top, bottom = fmt_parte_q(
+            parte,
+            to_sort
+        )
+
+        partes_formateadas.append(
+            f"⎛ {top} ⎞\n⎝ {bottom} ⎠"
+        )
+
+    return " ⊗ ".join(partes_formateadas)
 
 
-def fmt_parte_q(parte: list[tuple[int, int]], to_sort: bool = True) -> tuple[str, str]:
+def fmt_parte_q(parte, to_sort: bool = True):
+    presentes, futuros = parte
+
     if to_sort:
-        # Ordenar por índice #
-        parte.sort(key=lambda x: x[1])
+        presentes = sorted(presentes)
+        futuros = sorted(futuros)
 
-    purv, mech = [], []
-    for time, idx in parte:
-        purv.append(ABECEDARY[idx]) if time else mech.append(LOWER_ABECEDARY[idx])
+    str_pres = ",".join(LOWER_ABECEDARY[i] for i in presentes) if presentes else VOID_STR
+    str_fut = ",".join(ABECEDARY[i] for i in futuros) if futuros else VOID_STR
 
-    str_purv = ",".join(purv) if purv else VOID_STR
-    str_mech = ",".join(mech) if mech else VOID_STR
-    width = max(len(str_purv), len(str_mech)) + 2
+    width = max(len(str_pres), len(str_fut)) + 2
 
-    return f"|{str_purv:^{width}}|", f"|{str_mech:^{width}}|"
+    return (
+        f"|{str_fut:^{width}}|",
+        f"|{str_pres:^{width}}|"
+    )
