@@ -1,3 +1,5 @@
+from time import time
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -218,7 +220,33 @@ class System:
             if cube.indice in valid_futures
         )
         return new_sys
+    
+    def k_partir(self, bloques):
+        new_sys = System.__new__(System)
+        new_sys.estado_inicial = self.estado_inicial
+        nuevos_ncubos = []
 
+        for cube in self.ncubos:
+            mecanismo_local = None
+            for grupo in bloques:
+                presentes = np.array(grupo[0], dtype=np.int8)
+                futuros = np.array(grupo[1], dtype=np.int8)
+                if cube.indice in futuros:
+                    mecanismo_local = presentes
+                    break
+            if mecanismo_local is None:
+                raise ValueError(
+                    f"El futuro {cube.indice} no fue asignado a ningún bloque"
+                )
+            ejes = np.setdiff1d(cube.dims, mecanismo_local)
+            nuevos_ncubos.append(
+                cube.marginalizar(
+                    ejes
+                )
+            )
+        new_sys.ncubos = tuple(nuevos_ncubos)
+        return new_sys 
+    
     def bipartir(
         self,
         alcance: NDArray[np.int8],
@@ -244,7 +272,7 @@ class System:
             for cube in self.ncubos
         )
         return new_sys
-
+    
     def distribucion_marginal(self):
         """
         Partiendo de idealmente un subsistema o una bipartición como entrada, se seleccionana los nodos/elementos cuando su estado es OFF o inactivo para cada uno de ellos, mediante la propiedad de las distribuciones marginales, esto nos permite calcular más eficientemente la EMD-Effect, logrando así determinar un coste para dar comparación entre idealmente, un sub-sistema y una bipartición. Hemos de aplicar una reversión en la selección del estado inicial puesto
