@@ -75,20 +75,45 @@ class Manager:
             f"{RESOLVER_PATH}/N{len(self.estado_inicial)}{self.pagina}/{self.estado_inicial}"
         )
 
-    def generar_red(self, dimensiones: int, datos_discretos: bool = True) -> str:
+    def cargar_red(self) -> np.ndarray:
         """
-        Se encarga de generar una red (TPM) en notación little endian para un sistema determinista o no determinista (esto en función a si contiene datos discretos o no respectivamente. Nunca confundir con un "Sistema continuo" puesto apela a otra definición totalmente diferente).
-        La red generada s almacenará en el "output_dir", un atributo dinámico en función a que si generaste una red de un tamaño X por primera vez, estará etiquetada como "A", si deseas generar otra red del mismo tamaño naturalmente contendrá los mismos datos puesto están determinados por la semilla numpy, de forma que la forma de obtener otra red diferente es actuando sobre el parámetro `datos_discretos`, siendo estas dos redes distintas en su contenido.
+        Carga la red de forma ultra rápida usando el formato binario de NumPy (.npy).
+        Si solo existe el CSV, lo convierte automáticamente la primera vez.
+        """
+        # Crear la ruta para el archivo binario rápido (.npy)
+        tpm_binaria = self.tpm_filename.with_suffix('.npy')
+        
+        # Si ya existe el binario optimizado, lo cargamos en un par de segundos
+        if tpm_binaria.exists():
+            print(f"[{time.strftime('%H:%M:%S')}] 🚀 Cargando caché binario ultra rápido: {tpm_binaria.name}")
+            return np.load(tpm_binaria)
+            
+        # Si no existe, usamos un método más rápido que genfromtxt para el CSV inicial
+        print(f"[{time.strftime('%H:%M:%S')}] ⚠️ No se encontró archivo binario. Parseando CSV original por única vez...")
+        
+        # Tip de velocidad: np.loadtxt con dtype explícito es más rápido que genfromtxt
+        dataset = np.loadtxt(self.tpm_filename, delimiter=COLON_DELIM, dtype=np.int8)
+        
+        # Guardar inmediatamente en binario para la próxima ejecución
+        print(f"[{time.strftime('%H:%M:%S')}] 💾 Guardando copia binaria optimizada para el futuro...")
+        np.save(tpm_binaria, dataset)
+        
+        return dataset
+
+    def generar_red(self, dimensiones: int, datos_deterministas: bool = True) -> str:
+        """
+        Se encarga de generar una red (TPM) en notación little endian para un sistema determinista o estocástico (esto en función a si contiene datos discretos o no respectivamente. Nunca confundir con un "Sistema continuo" puesto apela a otra definición totalmente diferente).
+        La red generada almacenará en el "output_dir", un atributo dinámico en función a que si generaste una red de un tamaño X por primera vez, estará etiquetada como "A", si deseas generar otra red del mismo tamaño naturalmente contendrá los mismos datos puesto están determinados por la semilla numpy, de forma que la forma de obtener otra red diferente es actuando sobre el parámetro `datos_deterministas`, siendo estas dos redes distintas en su contenido.
 
         Args:
             dimensiones (int): Número de nodos/elementos/variables/canales que se desea maneje la red, obteniendo un Sistema que para cada estado en $(t)$ tendrá un canalen $(t+1)$.
-            datos_discretos (bool, optional): Selecciona si se quiere que la red generada sea no determinista, con el valor de probabilidad como siempre, un real positivo entre 0 y 1 inclusivo. Por defecto es True.
+            datos_deterministas (bool, optional): Selecciona si se quiere que la red generada sea estocástica, con el valor de probabilidad como siempre, un real positivo entre 0 y 1 inclusivo. Por defecto es True.
 
         Raises:
-            ValueError: _description_
+            ValueError: Si las dimensiones son menores a 1.
 
         Returns:
-            str: _description_
+            str: El nombre del archivo generado.
         """
         np.random.seed(aplicacion.semilla_numpy)
 
@@ -103,12 +128,12 @@ class Manager:
         print(f"Tamaño estimado: {total_size_gb:.6f} GB")
         print(f"Tiempo estimado: {estimated_time:.1f} segundos")
 
-        if total_size_gb > 1:
-            if (
-                input("El sistema ocupará más de 1GB. ¿Continuar? (s/n): ").lower()
-                != "s"
-            ):
-                return None
+        if (
+            total_size_gb > 1
+            and input("El sistema ocupará más de 1GB. ¿Continuar? (s/n): ").lower()
+            != "s"
+        ):
+            return
 
         # Verificar archivos existentes y generar nuevo nombre
         base_path = Path(SAMPLES_PATH)
@@ -132,7 +157,7 @@ class Manager:
         print("Generando estados...")
         start_time = time.time()
 
-        if datos_discretos:
+        if datos_deterministas:
             states = np.random.randint(
                 2, size=(num_estados, dimensiones), dtype=np.int8
             )
@@ -145,8 +170,15 @@ class Manager:
         print(f"Guardando en {filepath}...")
         start_time = time.time()
         np.savetxt(
-            filepath, states, delimiter=COLON_DELIM, fmt="%d" if datos_discretos else "%.6f"
+            filepath,
+            states,
+            delimiter=COLON_DELIM,
+            fmt="%d" if datos_deterministas else "%.6f",
         )
+        
+        filepath_bin = filepath.with_suffix('.npy')
+        np.save(filepath_bin, states)
+        print(f"Versión binaria optimizada guardada en {filepath_bin.name}")
 
         file_size_gb = os.path.getsize(filepath) / (1024**3)
         print(f"Archivo guardado: {file_size_gb:.6f} GB")
