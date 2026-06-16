@@ -68,7 +68,7 @@ import traceback
 
 from openpyxl import load_workbook
 
-from KGeoMIP.src.Method2_Dynamic_Programming_Reformulation.src.controllers.strategies.KGeoMIP import KGeoMIP
+from src.controllers.strategies.KGeoMIP import KGeoMIP
 from src.controllers.manager import Manager
 from src.controllers.strategies.geometric import GeometricSIA
 # Optional import: this project often runs only geometric strategy.
@@ -169,12 +169,13 @@ def ejecutar_desde_excel(
     print(f"Procesando hoja: {ws.title}")
 
     COLUMNAS = {
-        2: {"particion": "K", "perdida": "L", "tiempo": "M"},
-        3: {"particion": "Q", "perdida": "R", "tiempo": "S"},
-        4: {"particion": "Z", "perdida": "AA", "tiempo": "AB"},
-        5: {"particion": "AI", "perdida": "AJ", "tiempo": "AK"},
+        2: {"particion": "G", "perdida": "H", "tiempo": "I"},
+        3: {"particion": "M", "perdida": "N", "tiempo": "O"},
+        4: {"particion": "S", "perdida": "T", "tiempo": "U"},
+        5: {"particion": "Y", "perdida": "Z", "tiempo": "AA"},
 
     }
+
 
     fila_inicio = 7 + inicio
     fila_fin = min(ws.max_row, fila_inicio + cantidad - 1)
@@ -277,13 +278,13 @@ def iniciar():
         str(GEOMIP_ROOT / "results" / "DatosPruebas2026_1.xlsx"),
         )
     )
-    for k in range(2, 3):
+    for k in range(3, 4):
         ejecutar_desde_excel(
             ruta_excel=ruta_excel,
-            hoja=8,
+            hoja=1,
             k=k,
             tamaño_estado=10,
-            cantidad=1
+            cantidad=10
         )
 
 
